@@ -1,0 +1,12 @@
+NOTE: WE ARE USING BASTION OS 9.7 AND OCP VERSION IS 4.18 AND RHCOS 4.18.1
+##in thgis file i mentioned the rpm name that need to be installed on bastion server 
+
+dnf install -y bind bind-utils     ##this package can install the dns package
+dnf install -y dhcp-server          ##thsi package can install the the dhcp package
+dnf install -y haproxy              ##this package can install the haproxy server
+dnf install -y nmap-ncat            ##this package can install nmap and ncat command
+dnf install httpd -y                ##from this we can setup the httpd webserver
+
+
+
+###these are the package required to be download 
