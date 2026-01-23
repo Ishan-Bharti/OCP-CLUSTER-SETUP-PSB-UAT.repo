@@ -10,3 +10,5 @@ dnf install httpd -y                ##from this we can setup the httpd webserver
 
 
 ###these are the package required to be download 
+
+and quay registry also setup on bastion server by systemd we have also create one repo for quay setup 
