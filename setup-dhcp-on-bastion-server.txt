@@ -1,0 +1,90 @@
+##in the file we can setup dhcp service for all the master worker and infra node bind the node ip with respective macaddress
+
+##clean the bydefault dhcp.conf file path is /etc/dhcp/dhcpd.conf
+setp1: > /etc/dhcp/dhcpd.conf   ##delete the data of bydefault dhcpd.conf file and pasted our data in dhcpd.conf file
+
+setp2: vim /etc/dhcp/dhcpd.conf
+
+authoritative;
+ddns-update-style none;
+allow booting;
+allow bootp;
+
+default-lease-time 600;
+max-lease-time 7200;
+
+subnet 172.25.147.0 netmask 255.255.255.0 {
+  option subnet-mask 255.255.255.0;
+  option domain-name "punjabandsind.bank.in";
+  option domain-name-servers 172.25.147.76;
+}
+
+# -----------------------------
+# OpenShift Static Reservations
+# -----------------------------
+#Boot
+host DRSVRVDTWNAPUT2 {
+  hardware ethernet 00:50:56:af:6f:c8;
+  fixed-address 172.25.147.72;
+}
+
+# Masters
+host DRSVRVDTMNAPUT1 {
+  hardware ethernet 00:50:56:af:ee:1c;
+  fixed-address 172.25.147.68;
+}
+
+host DRSVRVDTMNAPUT2 {
+  hardware ethernet 00:50:56:af:87:7e;
+  fixed-address 172.25.147.69;
+}
+
+host DRSVRVDTMNAPUT3 {
+  hardware ethernet 00:50:56:af:8d:e6;
+  fixed-address 172.25.147.70;
+}
+
+# Workers
+host DRSVRVDTWNAPUT1 {
+  hardware ethernet 00:50:56:af:cd:d0;
+  fixed-address 172.25.147.71;
+}
+
+#host DRSVRVDTWNAPUT2 {
+#  hardware ethernet 00:50:56:af:6f:c8;
+#  fixed-address 172.25.147.72;
+#}
+
+# Infra
+host DRSVRVDTINAPUT1 {
+  hardware ethernet 00:50:56:af:60:88;
+  fixed-address 172.25.147.73;
+}
+
+host DRSVRVDTINAPUT2 {
+  hardware ethernet 00:50:56:af:a5:1e;
+  fixed-address 172.25.147.74;
+}
+
+host DRSVRVDTINAPUT3 {
+  hardware ethernet 00:50:56:af:30:51;
+  fixed-address 172.25.147.75;
+}
+
+:wq!
+
+step3: save the file change the values as per accordling like mac address ip adrress give the subnet subnet mask domain name as per bank in my case punjabandsind.bank.in and in domain name server give the server where dns is running my cas running on 
+bastion server ip is 172.25.147.76 this is my bastion server and my subnet is 172.25.147.0  ##all the machine are in this range like 172.25.147.68  to 76.
+
+NOTE: one every thing is done restart the dhcpd server make sure service is running properly without any error and and check is will be assign on each vm for master worker and infra node
+
+step5: command to start the dhcp service 
+systemctl status dhcpd   ##check the service status
+systemctl start dhcpd    ##start the dhcpd service
+systemctl enable dhcpd   ##enable the dhcpd service start on every boot automaticall start the service
+systemctl status dhcpd    ##check the status of service service is running without any error if service stuck check te logs and troubleshoot the service command is 
+journalctl -xe -u dhcpd    ##check teh logs of service
+systemctl restart dhcpd    ##reestart the service check again if again fails reload the servce command below
+systemctl reload dhcpd     ##from this command we can reload the service dhcpd
+
+###service are running file means dhcp is up and proper running ################
