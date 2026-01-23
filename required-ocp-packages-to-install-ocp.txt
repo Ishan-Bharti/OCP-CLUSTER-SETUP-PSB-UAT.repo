@@ -1,0 +1,24 @@
+###in this we can give the requierd package for ocp installation
+
+openshift-client-linux-amd64-rhel9-4.18.1.tar.gz    ##install this one binary this is oc command
+openshift-install-linux.tar.gz                      ##install this binary command name openshift-install
+rhcos-X.X.X-x86_64-metal.x86_64.raw.gz              ##need this one yeah metal wala install krna hai ocp yhi setup krega
+https://mirror.openshift.com/pub/openshift-v4/dependencies/rhcos/4.18/4.18.1/rhcos-4.18.1-x86_64-live.x86_64.iso   ##url to download iso
+ocp-4.18.1-images.tar                                ##in this file all the images of ocp
+
+
+NOte: also need these image to setup quay registry
+
+[root@DRSVRVDTBNOAPUT mirror]# ls -lrth
+total 5.2G
+-rwxr-xr-x. 1 root  root   12M Nov 14 07:16 mirror-registry
+-rw-r--r--. 1 root  root  1.3G Nov 14 07:17 quay.tar
+-rw-r--r--. 1 root  root  449M Nov 14 07:17 redis.tar
+-rw-r--r--. 1 root  root  224M Nov 14 07:17 pause.tar
+-rw-r--r--. 1 root  root  306M Nov 14 07:17 execution-environment.tar
+-rw-r--r--. 1 root  root   98M Nov 14 07:17 sqlite3.tar
+-rw-r--r--. 1 root  root  2.0G Nov 14 07:17 image-archive.tar
+-rwxrwxrwx. 1 a2409 a2409 911M Jan 21 11:17 mirror-registry-amd64.tar.gz
+[root@DRSVRVDTBNOAPUT mirror]#
+
+note: we need all these images for cluster setup agar kuch image bchi to  ai add kr dunga is repo mai
