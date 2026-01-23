@@ -1,0 +1,108 @@
+###In this file we can write the steps to setup haproxy on my bastion server i guess haproxy package is intsllade on bastion sever in not install install it 
+step1: clear by default file haproxy.cfg
+cat  /etc/haproxy/haproxy.cfg
+> /etc/haproxy/haproxy.cfg
+
+vim /etc/haproxy/haproxy.cfg
+
+global
+    log /dev/log local0
+    log /dev/log local1 notice
+    daemon
+    maxconn 20000
+    tune.ssl.default-dh-param 2048
+
+defaults
+    log     global
+    mode    tcp
+    option  tcplog
+    option  dontlognull
+    option  tcpka
+    timeout connect 10s
+    timeout client  5m
+    timeout server  5m
+    default-server inter 3s fall 3 rise 2
+
+listen stats
+    bind *:8404
+    mode http
+    stats enable
+    stats uri /stats
+    stats refresh 10s
+
+# ---------------------------------------------
+# OpenShift API Server (6443)
+# api.ocpcbdcuat.punjabandsind.bank.in
+# ---------------------------------------------
+frontend ocp_api
+    bind *:6443
+    default_backend ocp_api_backend
+
+backend ocp_api_backend
+    balance roundrobin
+    option tcp-check
+    server DRSVRVDTWNAPUT2 DRSVRVDTWNAPUT2.punjabandsind.bank.in:6443 check
+    server DRSVRVDTMNAPUT1 DRSVRVDTMNAPUT1.punjabandsind.bank.in:6443 check
+    server DRSVRVDTMNAPUT2 DRSVRVDTMNAPUT2.punjabandsind.bank.in:6443 check
+    server DRSVRVDTMNAPUT3 DRSVRVDTMNAPUT3.punjabandsind.bank.in:6443 check
+
+# ---------------------------------------------
+# Machine Config Server (22623)
+# api-int.ocpcbdcuat.punjabandsind.bank.in
+# ---------------------------------------------
+frontend ocp_mcs
+    bind *:22623
+    default_backend ocp_mcs_backend
+
+backend ocp_mcs_backend
+    balance roundrobin
+    option tcp-check
+    server DRSVRVDTWNAPUT2 DRSVRVDTWNAPUT2.punjabandsind.bank.in:22623 check
+    server DRSVRVDTMNAPUT1 DRSVRVDTMNAPUT1.punjabandsind.bank.in:22623 check
+    server DRSVRVDTMNAPUT2 DRSVRVDTMNAPUT2.punjabandsind.bank.in:22623 check
+    server DRSVRVDTMNAPUT3 DRSVRVDTMNAPUT3.punjabandsind.bank.in:22623 check
+
+# ---------------------------------------------
+# OpenShift Ingress HTTP (80)
+# *.apps.ocpcbdcuat.punjabandsind.bank.in
+# ---------------------------------------------
+frontend ocp_ingress_http
+    bind *:80
+    default_backend ocp_ingress_http_backend
+
+backend ocp_ingress_http_backend
+    balance roundrobin
+    option tcp-check
+    server DRSVRVDTINAPUT1 DRSVRVDTINAPUT1.punjabandsind.bank.in:80 check
+    server DRSVRVDTINAPUT2 DRSVRVDTINAPUT2.punjabandsind.bank.in:80 check
+    server DRSVRVDTINAPUT3 DRSVRVDTINAPUT3.punjabandsind.bank.in:80 check
+
+# ---------------------------------------------
+# OpenShift Ingress HTTPS (443)
+# *.apps.ocpcbdcuat.punjabandsind.bank.in
+# ---------------------------------------------
+frontend ocp_ingress_https
+    bind *:443
+    default_backend ocp_ingress_https_backend
+
+backend ocp_ingress_https_backend
+    balance roundrobin
+    option tcp-check
+    server DRSVRVDTINAPUT1 DRSVRVDTINAPUT1.punjabandsind.bank.in:443 check
+    server DRSVRVDTINAPUT2 DRSVRVDTINAPUT2.punjabandsind.bank.in:443 check
+    server DRSVRVDTINAPUT3 DRSVRVDTINAPUT3.punjabandsind.bank.in:443 check
+
+:wq!
+
+NOte: save the file and exit from the file in this file 6443 is our api port and in down server hostname and secodn is also hostname for server api server run on master1,2,3 and 22623 is our mcp port this is also run on master node and 80 and 443 is port for ingress route
+also runs on master1 master2 and master3 change hostname with you server name and start the service
+
+step2: start the haproxy service
+systemctl status haproxy   ##first check the status
+systemctl start  haproxy   ## start the haproxy service 
+systemctl enable haproxy   ##enable the haproxy service to start on evry machine booting time
+systemctl restart/reload haproxy  ##command to restart or reload the serice
+journalctl -xe -u haproxy     ##command to check the haproxy logs if you find any issue check logs from here
+
+
+===================================haprox setup complete =======================================================================
