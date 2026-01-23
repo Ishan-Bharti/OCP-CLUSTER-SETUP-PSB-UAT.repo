@@ -99,6 +99,7 @@ also runs on master1 master2 and master3 change hostname with you server name an
 
 step2: start the haproxy service
 systemctl status haproxy   ##first check the status
+setsebool -P haproxy_connect_any 1  # SELinux name_bind access
 systemctl start  haproxy   ## start the haproxy service 
 systemctl enable haproxy   ##enable the haproxy service to start on evry machine booting time
 systemctl restart/reload haproxy  ##command to restart or reload the serice
