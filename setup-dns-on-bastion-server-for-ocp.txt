@@ -1,0 +1,182 @@
+###in this file we an setup the dns server on my bastion server i guess dns rpm is installed on our bastion server so we can start the configuration
+
+step1: remove the by default come named.conf file path is
+cat /etc/named.conf    ##this is bydefault file delete the data of the file and write your own data
+>  /etc/named.conf
+vim cat /etc/named.conf
+
+options {
+    listen-on port 53 { any; };
+    listen-on-v6 { none; };
+    directory "/var/named";
+    allow-query { any; };
+    recursion yes;
+    allow-recursion { any; };
+    forwarders {
+        172.25.191.4;
+    };
+    dnssec-validation no;
+    pid-file "/run/named/named.pid";
+    session-keyfile "/run/named/session.key";
+};
+zone "punjabandsind.bank.in" IN {
+    type master;
+    file "forward.punjabandsind.bank.in.db";
+};
+zone "147.25.172.in-addr.arpa" IN {
+    type master;
+    file "reverse.punjabandsind.bank.in.db";
+    allow-update { none; };
+};
+
+:wq!
+
+step2: save the file and exist from the file in director give the path name your reverse zone and forward file place in my case forward zone file and reverse zone file inside the /var/named/ directory 
+in forwad zone give the bank domain name in my case bank domain name is punjabandsind.bank.in and file your file name forward zone in my case forward file name is forward.punjabandsind.bank.in.db 
+and in second give you reverse zone in my case ip subnet is 172.25.147.0  write from the back remove the zero you can see the above entry like 147.25.172 and give the reverse file name in my case file name is
+forward.punjabandsind.bank.in.db   and in my file ise at top ip 172.25.191.4 this is bank dns ip.
+
+C:\Users\2432>nslookup punjabandsind.bank.in
+Server:  DCSVRPADSPDC01.psb.org.in
+Address:  172.24.191.4
+
+Name:    punjabandsind.bank.in     ## we have run the nslookup command on local pc cmd the ip comme from the domain name pu th this ip on above
+
+################### /etc/named.conf file is ready now we can ready forward zone file and reverse zone file  ####################################################################################
+
+step1: first create the dircetory name is 
+mkdir /var/named
+step2: inside the /var/named directory create two file name is forward.punjabandsind.bank.in.db and reverse.punjabandsind.bank.in.db
+
+touch /var/named/forward.punjabandsind.bank.in.db    ##from this command create the forward zone file mean resolve domain name to ip address 
+touch /var/named/reverse.punjabandsind.bank.in.db    ##this command can create the reverse zone file means resolve from ip to domain name this is for when we are setup ocp cluster our node can ping pong with other or resolve from name to ip and iup to name
+
+step3: now first we create the forward zone file 
+
+vim /var/named/forward.punjabandsind.bank.in.db
+
+$TTL 1D
+@   IN SOA drsvrvdtbnouput.punjabandsind.bank.in. root.punjabandsind.bank.in. (
+        2026012203 ; serial
+        1H
+        15M
+        1W
+        1D )
+    IN NS drsvrvdtbnouput.punjabandsind.bank.in.
+
+; NS A record (must exist)
+drsvrvdtbnouput.punjabandsind.bank.in.  IN A 172.25.147.76
+
+; --------------------------
+; Uppercase Static Hostnames
+; --------------------------
+DRSVRVDTBNOAPUT    IN A 172.25.147.76
+DRSVRVDTMNAPUT1    IN A 172.25.147.68
+DRSVRVDTMNAPUT2    IN A 172.25.147.69
+DRSVRVDTMNAPUT3    IN A 172.25.147.70
+DRSVRVDTWNAPUT1    IN A 172.25.147.71
+DRSVRVDTWNAPUT2    IN A 172.25.147.72
+DRSVRDINAPUT1      IN A 172.25.147.73
+DRSVRDINAPUT2      IN A 172.25.147.74
+DRSVRDINAPUT3      IN A 172.25.147.75
+
+; --------------------------
+; Lowercase FQDNs for OpenShift
+; --------------------------
+drsvrvdtbnouput.punjabandsind.bank.in    IN A 172.25.147.76
+drsvrvdtmnaput1.punjabandsind.bank.in   IN A 172.25.147.68
+drsvrvdtmnaput2.punjabandsind.bank.in   IN A 172.25.147.69
+drsvrvdtmnaput3.punjabandsind.bank.in   IN A 172.25.147.70
+drsvrvdtwnaput1.punjabandsind.bank.in   IN A 172.25.147.71
+drsvrvdtwnaput2.punjabandsind.bank.in   IN A 172.25.147.72
+drsvrdtinaput1.punjabandsind.bank.in    IN A 172.25.147.73
+drsvrdtinaput2.punjabandsind.bank.in    IN A 172.25.147.74
+drsvrdtinaput3.punjabandsind.bank.in    IN A 172.25.147.75
+
+; --------------------------
+; Aliases / Friendly Names
+; --------------------------
+bootstrap.ocpcbdcuat                     IN A 172.25.147.72
+worker1.ocpcbdcuat                       IN A 172.25.147.71
+worker2.ocpcbdcuat                       IN A 172.25.147.72
+infra1.ocpcbdcuat                         IN A 172.25.147.73
+infra2.ocpcbdcuat                         IN A 172.25.147.74
+infra3.ocpcbdcuat                         IN A 172.25.147.75
+master1.ocpcbdcuat                        IN A 172.25.147.68
+master2.ocpcbdcuat                        IN A 172.25.147.69
+master3.ocpcbdcuat                        IN A 172.25.147.70
+
+; --------------------------
+; OpenShift Mandatory Records
+; --------------------------
+api.ocpcbdcuat       IN A 172.25.147.76
+api-int.ocpcbdcuat   IN A 172.25.147.76
+*.apps.ocpcbdcuat    IN A 172.25.147.76
+
+; --------------------------
+; Bastion / Registry / HAProxy
+; --------------------------
+registryuat-ocpcbdcuat IN A 172.25.147.76
+
+:wq!
+
+setp2: save the file and exist from the file drsvrvdtbnouput this my bastion hostname at you end give your bastion hostname and domain name upper static hostname bank ne bola the hmare node k hostname change nhi hine chahiye toh hmne yeah diye the but ocp uppercase mai installtion allow nhi krta hai tabhi
+maine niche lower FQDN diye hai jo ocp ko installtio krne dengey on alias name hai niche openshift k mandatory records hai api ka inme sba mai bastion server ip dena hai or niche  bastion par meri registry run kr rhi hai to uska ip dea hai or registry name jasie 
+meri ka name registryuat-ocpcbdcuat hai toh yha bhi diya hai.
+
+=================================================now create the reverse zone file =========================================================================================
+
+vim /var/named/reverse.punjabandsind.bank.in.db
+
+$TTL 1D
+@   IN SOA drsvrvdtbnouput.punjabandsind.bank.in. root.punjabandsind.bank.in. (
+        2026012203 ; serial
+        1H
+        15M
+        1W
+        1D )
+    IN NS drsvrvdtbnouput.punjabandsind.bank.in.
+
+; --------------------------
+; PTR Records (IP → FQDN)
+; --------------------------
+
+; Bastion / DNS / HAProxy
+76      IN PTR registryuat-ocpcbdcuat.punjabandsind.bank.in.
+76      IN PTR drsvrvdtbnouput.punjabandsind.bank.in.
+
+; Masters
+68      IN PTR drsvrvdtmnaput1.punjabandsind.bank.in.
+69      IN PTR drsvrvdtmnaput2.punjabandsind.bank.in.
+70      IN PTR drsvrvdtmnaput3.punjabandsind.bank.in.
+
+; Workers
+71      IN PTR drsvrvdtwnaput1.punjabandsind.bank.in.
+72      IN PTR drsvrvdtwnaput2.punjabandsind.bank.in.
+72      IN PTR bootstrap.ocpcbdcuat.punjabandsind.bank.in.
+;72      IN PTR worker2.ocpcbdcuat.punjabandsind.bank.in.
+
+; Infra
+73      IN PTR drsvrdtinaput1.punjabandsind.bank.in.
+73      IN PTR infra1.ocpcbdcuat.punjabandsind.bank.in.
+74      IN PTR drsvrdtinaput2.punjabandsind.bank.in.
+74      IN PTR infra2.ocpcbdcuat.punjabandsind.bank.in.
+75      IN PTR drsvrdtinaput3.punjabandsind.bank.in.
+75      IN PTR infra3.ocpcbdcuat.punjabandsind.bank.in.
+
+:wq!
+
+note: save the file and exist from the file in soa part give the bastion hostname and bank domain name and in bastion dns entry give the bastion 76 ip and registry url and hsoatname master mai master ka last ka ip address jaise mere case mai 68,69,70 haie niche worker ka
+ip dena jaise mer worker ka ip 71,72 or worker2 ko maine boostrap ka ek entry bhi di or hostname wali bhi ase apko dalna hai or niche infra node ki entry dalni hai jaise maine ek mai name diya hai or dusra bank k histabe se jo hostname hai bho bhi diya hai ase dena hia
+sb krne k bast service ko start krna hai sb shi rha service start ho jiegi or error ata hai logs dekne hai or ab apki node pr hostname dikega nhi dikega node vm ko ek bar reboot lena hai reflect ho jiega name
+
+step1: start the service
+systemctl status named    ##check the status of service dns
+systemctl start named      ## start the dn service
+systemctl enable named    ##enable the service and check status 
+systemctl status named    ##check the status of the service 
+systemctl restart named   ##command to restart the service
+systemctl reload named    ##command to reload the service all dns records if you got any error trouble by run the command 
+journalctl -xe -u named   ##comamnd to check the dns logs 
+
+========================================================================================================================================================================================
