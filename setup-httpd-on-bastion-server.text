@@ -1,0 +1,62 @@
+################In this file we can setup the httpd server and place all the file inside /var/www/html/ so from coreos we an install the file and boot our bootsrap master and worker node
+
+step1: installed httpd package on bastion server if done donot start the service becouse haproxy is already running on port 80 and httpd is also use port 80 so need to be change 80 to 8080
+sed -i 's/Listen 80/Listen 0.0.0.0:8080/' /etc/httpd/conf/httpd.conf  ##from this command change the httpd port 80 to 8080
+systemctl enable httpd
+systemctl start httpd
+systemctl status httpd  ##check the service status up and properly running 
+curl localhost:8080     ##if you got success means webserver is working 
+mkdir /root/ocp4/install/ocp-install  ##create the directory
+cp install-config.yaml /root/ocp4/install/ocp-install   ##copy install config file to this path
+openshift-install create manifests --dir ~/ocp-install/   ##using openshift-install command create the manifest files
+openshift-install create ignition-configs --dir ~/ocp-install/   ##using mansifest files create the ignition files 
+mkdir /var/www/html/ocp4
+mkdir /var/www/html/ignitions/
+mv rhcos-X.X.X-x86_64-metal.x86_64.raw.gz /var/www/html/ocp4/rhcos ##move the rhcos metal raw image to ocp4 folder with name rhcos
+cp -rvf iginiton-all-files /var/www/html/ignitions/
+chcon -R -t httpd_sys_content_t /var/www/html/ocp4/   ##Change ownership and permissions of the web server directory
+chown -R apache: /var/www/html/ocp4/
+chmod 755 /var/www/html/ocp4/
+curl localhost:8080/ocp4/   ##check from curl access the content or not
+
+systemctl restart httpd   ##after change once bounce the service 
+
+#####httpd setup complete ##########################################
+
+now run comand on bootstrap node comman is 
+sudo coreos-installer install /dev/sda --ignition-url http://<httpd server IP>:8080/ignition/bootstrap.ign --image-url http://<httpd server IP>:8080/rhcos/rhcos.raw.gz --insecure-ignition --insecure
+
+Note: taking two three minutes when completes and power off the bootstrap node and detaich the iso image and check the bootstarp logs from bastion server 
+~/openshift-install --dir ~/ocp-install wait-for bootstrap-complete --log-level=debug   ##You can monitor the bootstrap process from the ocp-svc host at different log levels (debug, error, info) 
+oc get no ##check the node master are created or not jump insiade the master server 1 and check the kubelet service are up and running or not or check the container by running the ommand 
+podman ps ## 2 containers are showing 
+
+NOTE: IF YOU SEE EVERY THIS GOODS RUN COMMAND ON MASTER SERVER RUN ON FIRST MAST NODE THEY COMPLETE RUN ON SECOND 
+
+sudo coreos-installer install /dev/sda --ignition-url http://<httpd server IP>:8080/ignition/master.ign --image-url http://<httpd server IP>:8080/rhcos/rhcos.raw.gz --insecure-ignition --insecure   ##run on master node
+
+and lgoin on bastion server and run the command and approve the certificates
+
+export KUBECONFIG=~/ocp-install/auth/kubeconfig
+# Test auth by viewing cluster nodes
+oc get nodes  
+
+# View CSRs
+oc get csr
+# Approve all pending CSRs
+oc get csr -o go-template='{{range .items}}{{if not .status}}{{.metadata.name}}{{"\n"}}{{end}}{{end}}' | xargs oc adm certificate approve   ##proove pending certificate
+# Wait for kubelet-serving CSRs and approve them too with the same command
+oc get csr -o go-template='{{range .items}}{{if not .status}}{{.metadata.name}}{{"\n"}}{{end}}{{end}}' | xargs oc adm certificate approve
+
+watch -n5 oc get nodes  
+
+NOTE: IF EVRYTHINGS IS GOING IN RIGHT DIRECTION DO ON INFRA NODE AND THAN WORKER SAME PROCESS only change in comman dis master to worker.ign
+
+sudo coreos-installer install /dev/sda --ignition-url http://<httpd server IP>:8080/ignition/worker.ign --image-url http://<httpd server IP>:8080/rhcos/rhcos.raw.gz --insecure-ignition --insecure   ##run on infra node 
+
+note: check the co pod and all the things and access gui console
+
+####################################################################################################################################################
+
+
+
