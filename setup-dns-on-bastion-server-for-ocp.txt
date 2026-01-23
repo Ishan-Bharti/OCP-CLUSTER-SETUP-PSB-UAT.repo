@@ -179,6 +179,20 @@ systemctl restart named   ##command to restart the service
 systemctl reload named    ##command to reload the service all dns records if you got any error trouble by run the command 
 journalctl -xe -u named   ##comamnd to check the dns logs 
 
+
+NOTE: check all the records on bastion server from ip to name or name to ip resolve ho rhe hai ya nhi
+
+dig +short registryuat.ocpcbdcuat.psb.bank.in
+dig +short master1.ocpcbdcuat.psb.bank.in
+dig +short master2.ocpcbdcuat.psb.bank.in
+dig +short master3.ocpcbdcuat.psb.bank.in
+dig +short infra1.ocpcbdcuat.psb.bank.in
+dig +short infra2.ocpcbdcuat.psb.bank.in
+dig +short infra3.ocpcbdcuat.psb.bank.in
+dig +short worker1.ocpcbdcuat.psb.bank.in
+dig +short worker2.ocpcbdcuat.psb.bank.in
+
+
 ========================================================================================================================================================================================
 
 note: kuch file mere is path par khud generate hui ya bnie hai mujhe id nhi hai agar koi issue aye toh app file crate krk check kr skty ho 
