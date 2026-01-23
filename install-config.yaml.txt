@@ -1,0 +1,141 @@
+##this is the file content to setup the ocp cluster in the file we can give the pod network service ip subnet network and in this file one thing is missing machineNetwork: cidr add this column 
+in my case when we are start the master node and run the coreinstallr command and check the logs throw error node willl not get suitable ip address so we will assign manual ip address on each node
+
+vim install-config.yaml
+
+apiVersion: v1
+baseDomain: punjabandsind.bank.in
+
+metadata:
+  name: ocpcbdcuat
+
+# ---------------------------------------------------
+# Compute nodes (Workers + Infra)
+# ---------------------------------------------------
+compute:
+- name: worker
+  replicas: 3
+  hyperthreading: Enabled
+  platform:
+    none: {}
+
+
+# ---------------------------------------------------
+# Control Plane (Masters)
+# ---------------------------------------------------
+controlPlane:
+  name: master
+  replicas: 3
+  hyperthreading: Enabled
+  platform:
+    none: {}
+
+# ---------------------------------------------------
+# Networking
+# ---------------------------------------------------
+networking:
+  networkType: OVNKubernetes
+  clusterNetwork:
+  - cidr: 10.128.0.0/14
+    hostPrefix: 23
+  serviceNetwork:
+  - 172.30.0.0/16
+
+# ---------------------------------------------------
+# Platform (UPI / Bare Metal)
+# ---------------------------------------------------
+platform:
+  none: {}
+
+fips: false
+
+# ---------------------------------------------------
+# SSH Key
+# ---------------------------------------------------
+sshKey: |
+  ssh-rsa  AAAAB3NzaC1yc2EAAAADAQABAAACAQC9J7BPAzE9EVZLBO3Me31480dw11TAR4rzUS/Z2aN1gpR8SQmhjvlMovmJ/wk6BfgnoLw0hdVFJd6UUaKwHrZ4i7ndnexiA6dPEOp6BZhSDQkDRAiUQJvdCkHuwFaBRl9XLdFuWJMK4NuwlUG4Vzkn4NGypJJy8tiJ97hj9FPgfiwOt10WlM1RqZT7iZKcMunkNKPHTk184UaY/FFix6YAEmm1vfIzdBTfdLIlrw4GVGZowN/YrXTT8yphhxn8fNcptPED0t2VJAKgKICf9yxGYwvHU6cgSOmorFFRCZwLpyySn4mY3PGJ1FNkB3Ei3Vq7B58wisUUjI/c8tgJt8wcxXGjFvI4w+URFZ2KXh3RbbTq+O8otDw56nipHNj6K1F5LULzy5TNsGoilsveLq5BDvJx0DnF9YV00WGr6MWoXGKX//iNP6wMR2D94lXgnStEQP6znDHX3VMUhhSmdR+IiBhbZ7lYKwfDzvmydTq/zfbarkAZj6u1Wsxs1brbIvCN62RFdBirG4geRf5/VTYtuUIYruQOkfoiXl8R1mqD//x2L6nokbfyQf1J/MZOAwcpH2l8K90E8ORFJoiZ3G8uNuZZbd/Wst1LlsiKx+Kb786RqCmXGV8ON6ARgfX5jrh+Jyj6Y8I3xYJWNQ1IurY8a/RFeDx8bMqdHUfS2tQwVQ== root@DRSVRVDTBNOAPUT
+
+# ---------------------------------------------------
+# Pull Secret
+# ---------------------------------------------------
+pullSecret: >
+  {
+    "auths": {
+      "registryuat-ocpcbdcuat.punjabandsind.bank.in:8443": {
+        "auth": "cHNiYmFuazpyZWRoYXQxMjM="
+      },
+      "quay.io": {
+        "auth": "ZHVtbXk6ZHVtbXk="
+      }
+    }
+  }
+
+# ---------------------------------------------------
+# Internal Registry CA
+# ---------------------------------------------------
+additionalTrustBundle: |
+  -----BEGIN CERTIFICATE-----
+  MIIELjCCAxagAwIBAgIUPQlmKnd/RYGySzOGJ8vY46mW2CIwDQYJKoZIhvcNAQEL
+  BQAwgYYxCzAJBgNVBAYTAlVTMQswCQYDVQQIDAJWQTERMA8GA1UEBwwITmV3IFlv
+  cmsxDTALBgNVBAoMBFF1YXkxETAPBgNVBAsMCERpdmlzaW9uMTUwMwYDVQQDDCxy
+  ZWdpc3RyeXVhdC1vY3BjYmRjdWF0LnB1bmphYmFuZHNpbmQuYmFuay5pbjAeFw0y
+  NjAxMjExMTQ5NTJaFw0yODExMTAxMTQ5NTJaMIGGMQswCQYDVQQGEwJVUzELMAkG
+  A1UECAwCVkExETAPBgNVBAcMCE5ldyBZb3JrMQ0wCwYDVQQKDARRdWF5MREwDwYD
+  VQQLDAhEaXZpc2lvbjE1MDMGA1UEAwwscmVnaXN0cnl1YXQtb2NwY2JkY3VhdC5w
+  dW5qYWJhbmRzaW5kLmJhbmsuaW4wggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEK
+  AoIBAQDFXLvYUoeIgn7TWgm1PHyfSMDXkHuRTqknZdy5bhDZzw5WTghmRuewZdiI
+  Cikq2qL7/DPculadkR7a3yw8gU9E16tpE+JDwhlV0f2kNLLlKyPVJXpgN6DkUGjT
+  YU/wZo9hC1i4ctWfheOQbJMAOrv4Dp4C9FmqAR5hsdu8mzS3djbFnq/ht3F42fRA
+  5ZMGW6ery4uTx+V4hLhA3BXj/G6cE0Tg8pscKBfByJQpPpXeil5JH4F3A7dZcfL1
+  jxMWlCrpUTreaB0cONrqRtm5FnQx/y3l/DPB7SGLVRgrCuz3OnzWKMUfuzejLK0l
+  N241WHgde1qwMK8cJhNF/qCOhTgDAgMBAAGjgZEwgY4wCwYDVR0PBAQDAgLkMBMG
+  A1UdJQQMMAoGCCsGAQUFBwMBMDcGA1UdEQQwMC6CLHJlZ2lzdHJ5dWF0LW9jcGNi
+  ZGN1YXQucHVuamFiYW5kc2luZC5iYW5rLmluMBIGA1UdEwEB/wQIMAYBAf8CAQEw
+  HQYDVR0OBBYEFM7Rl22V89WkVBo/cCOYa6qi60l3MA0GCSqGSIb3DQEBCwUAA4IB
+  AQC4pZS8A4bTdMjV5P/+elfYYjTuBWFde2/qyXOvkm9U9D0KxYKIG6gM0M6hc+9J
+  gbgEPSnEmGtZj9iZvDt3U+X5SanFUUPCdoq2nEbhStP++U6jkX3UNnkAci39uukt
+  0CD3vSWQfyh3kcWlxhHwElv6O/x4/Ilwd7F3gWCf3PEefSAbk4oU1kvWqYUkbaf1
+  /L40wstJxyO9vHUzd/bypS7pZ25LgV5zB3+QDBQCcjNZULsG8ARUHk4yUTEh/r4E
+  zCB4nzH6q5d2s/L+UfM4jLIAqol+tWZV/VDnbanoq5xDXjjrukCeup0VroTvQLJ9
+  sn7YQMcP7SkcnFGp2IJgSnV2
+  -----END CERTIFICATE-----
+
+# ---------------------------------------------------
+# Image Content Sources (Disconnected)
+# ---------------------------------------------------
+imageContentSources:
+- mirrors:
+  - registryuat-ocpcbdcuat.punjabandsind.bank.in:8443/ocp/openshift4.18.1
+  source: quay.io/openshift-release-dev/ocp-release
+
+- mirrors:
+  - registryuat-ocpcbdcuat.punjabandsind.bank.in:8443/ocp/openshift4.18.1
+  source: quay.io/openshift-release-dev/ocp-v4.0-art-dev
+
+:wq!
+
+
+NOTE: save the file and exist from the file and modify as per according in my case give the bank domain name in my bank domain is punjabandsind.bank.in in metadata name give the clustername you want to set
+give the replica of master and worker in my case 3 master 3 worker 3 infra but this file we cannot write infra ocp allow only worker network as same per redhat recommended and in ssh give the pub key previsou you have create on 
+bastion server and in pull secret give the registry url in my case url is registryuat-ocpcbdcuat.punjabandsind.bank.in:8443  running on port 443 and in auth give the usrename and password and encode the value my case useraname is psbank
+and password is redhat123 encode like this and put here  echo 'psbbank:redhat123' | base64 get the value and put in auth and in quay auth this is bydeafult [root@DRSVRVDTBNOAPUT ocp4]# echo 'ZHVtbXk6ZHVtbXk=' | base64 -d
+dummy:dummy in the certificate give the rootCA.pem pervious when you setup registry the created is creatde put there and in mirror give the give teh registry url and when i login into my registry we create the organization name with ocp
+and inside create the repository name in my case name is openshift4.18.1 ase yeah pura url bana source mai yeah pacakge ayegey jo mai is repositry mai push kiye hogey same niche bhi ase yeah pacakage maine apni registry par push 
+kiye hogey 
+
+NOTE: mere case mai jb maine master par run kri thei command node pr ip assign nhi ho rha toh maine manual assign kra the command niche hai
+
+sudo nmcli con mod "Wired connection 1" ipv4.addresses 172.25.147.75/24
+sudo nmcli con mod "Wired connection 1" ipv4.gateway 172.25.147.1
+sudo nmcli con mod "Wired connection 1" ipv4.dns "172.25.147.76"
+sudo nmcli con mod "Wired connection 1" ipv4.dns-search "punjabandsind.bank.in"
+sudo nmcli con mod "Wired connection 1" ipv4.method manual
+sudo nmcli con down "Wired connection 1"
+sudo nmcli con up "Wired connection 1"
+
+NOTE: node ip change ethernet name change as per requirement and give the domain name
+
+setp: check service status of kubelet if running restart after changes the service
+systemctl restart kubelet
+systemctl status kubelet
+systemctl status crio
