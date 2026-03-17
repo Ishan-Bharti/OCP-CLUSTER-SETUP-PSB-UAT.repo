@@ -1,0 +1,1154 @@
+=================🔹 Plan 🔹===========
+    NAME						DNS								IP				MAC 				OS
+1.Bastion/Registry node  registryuat.ocpcbdcuat.psb.bank.in 10.121.2.180  							RHEL
+2.bootstrap			     bootstrap.ocpcbdcuat.psb.bank.in 	10.121.2.190     50:6b:8d:c8:db:83		RHCOS
+3.Master1  	             master1.ocpcbdcuat.psb.bank.in       10.121.2.181     50:6b:8d:89:32:5f		RHCOS	
+4.Master2                master2.ocpcbdcuat.psb.bank.in      10.121.2.182     50:6b:8d:cf:ff:9b		RHCOS
+5.Master3                master3.ocpcbdcuat.psb.bank.in       10.121.2.183     50:6b:8d:de:a0:f7		RHCOS	
+6.Infra1                 infra1.ocpcbdcuat.psb.bank.in        10.121.2.184     50:6b:8d:ff:68:77		RHCOS
+7.Infra2                 infra2.ocpcbdcuat.psb.bank.in       10.121.2.186     50:6b:8d:f4:c7:0a		RHCOS
+8.Infra3                 infra3.ocpcbdcuat.psb.bank.in        10.121.2.187     50:6b:8d:ab:13:9f		RHCOS
+9.Worker1                worker1.ocpcbdcuat.psb.bank.in      10.121.2.188     50:6b:8d:99:c7:6a		RHCOS
+10.worker2               worker1.ocpcbdcuat.psb.bank.in      10.121.2.188     50:6b:8d:cb:88:7d      RHCOS
+
+
+
+
+
+=================🔹 Disk partition bastion (Optional I have not used root/boot partition can proceed with Step 1) 🔹===========
+
+Quay Dedicated Disk Setup on RHEL 9 (Nutanix) – Stepwise Notes
+Goal
+
+Use a separate 150 Gi disk for Red Hat Quay storage so that:
+
+Root/boot disks remain untouched
+
+Disk can be detached and attached to a new VM if VM is lost
+
+Quay data remains intact
+
+
+
+STEP 0: Initial State (Before Disk Attachment)
+lsblk
+
+sda     30G
+├─sda1   1G   /boot
+└─sda2  29G
+  ├─rhel-root 26G  /
+  └─rhel-swap 3G   [SWAP]
+sr0
+
+df -h
+/dev/mapper/rhel-root   26G   /
+/dev/sda1             960M   /boot
+🔹 Only root disk present
+
+STEP 1: Disk Attached from Nutanix
+lsblk
+sdb   150G   disk   ← NEW RAW DISK
+🔹 Change: New disk /dev/sdb visible, not mounted, not formatted
+
+STEP 2: Attempt as Non-Root (Fails – Expected)
+parted /dev/sdb --script mklabel gpt
+
+
+STEP 3: Switch to Root & Create Partition
+su -
+parted /dev/sdb --script mklabel gpt
+parted /dev/sdb --script mkpart primary xfs 0% 100%
+
+lsblk
+sdb
+└─sdb1 150G  part
+
+STEP 4: Format Disk with XFS
+mkfs.xfs -f /dev/sdb1
+
+meta-data=/dev/sdb1
+...
+Discarding blocks...Done.
+🔹 Change: Disk formatted (still not mounted)
+
+
+STEP 5: Create Mount Directory
+mkdir -p /var/lib/quay
+🔹 Change: Mount point created (empty)
+
+
+STEP 6: Identify Disk UUID (Critical for Portability)
+blkid /dev/sdb1
+text
+bankpy code
+UUID="ae828610-df01-48a9-8f44-98e901af29db"
+TYPE="xfs"
+🔹 Change: UUID captured for /etc/fstab
+
+
+STEP 7: Persist Mount Using /etc/fstab
+vi /etc/fstab
+
+
+Added line:
+
+UUID=ae828610-df01-48a9-8f44-98e901af29db  /var/lib/quay  xfs  defaults,_netdev  0  0
+
+mount -a
+
+(hint) systemd still uses old version
+
+
+🔹 Note: Warning is normal; mount still works
+
+STEP 8: Verify Mount
+df -h
+
+/dev/sdb1  150G  1.1G  149G  1%  /var/lib/quay
+
+
+🔹 Change: Disk successfully mounted
+
+STEP 9: Set Ownership for Quay (Non-Root UID 1001)
+chown -R 1001:1001 /var/lib/quay
+chmod 755 /var/lib/quay
+
+
+🔹 Change: Permissions aligned for Quay containers
+
+STEP 10: Configure SELinux (Mandatory on RHEL 9)
+semanage fcontext -a -t container_file_t "/var/lib/quay(/.*)?"
+restorecon -Rv /var/lib/quay
+
+ls -ldZ /var/lib/quay
+
+system_u:object_r:container_file_t:s0 /var/lib/quay
+
+
+🔹 Change: SELinux context corrected (critical for containers)
+
+STEP 11: Create Quay Directory Structure
+mkdir -p /var/lib/quay/{config,storage,postgres}
+chown -R 1001:1001 /var/lib/quay
+
+
+🔹 Change: Quay-ready directory layout
+
+STEP 12: Reboot Validation
+reboot
+
+
+After login:
+
+df -h /var/lib/quay
+
+/dev/sdb1  150G  1.1G  149G  1%  /var/lib/quay
+
+mount | grep quay
+
+/dev/sdb1 on /var/lib/quay type xfs (...,_netdev)
+
+
+🔹 Final State: Disk auto-mounted after reboot
+
+FINAL STATUS (CONFIRMED)
+
+✔ Root & boot disks untouched
+
+✔ Dedicated 150 Gi disk for Quay
+
+✔ UUID-based mount (portable across VMs)
+
+✔ SELinux-safe
+
+✔ Survives reboot
+
+✔ Ready for Red Hat Quay deployment
+
+
+
+
+
+=================🔹 For unregistred RHEL machines Lab only for downloading required packages (wget,podman,openssl,etc)🔹===========
+
+For Lab Rhel is not register so use oracle repo 
+
+cat <<'EOF' > /etc/yum.repos.d/oracle-linux.repo
+[ol9_baseos_latest]
+name=Oracle Linux 9 BaseOS Latest ()
+baseurl=https://yum.oracle.com/repo/OracleLinux/OL9/baseos/latest/$basearch/
+gpgkey=https://yum.oracle.com/RPM-GPG-KEY-oracle-ol9
+gpgcheck=1
+enabled=1
+
+[ol9_appstream]
+name=Oracle Linux 9 AppStream ()
+baseurl=https://yum.oracle.com/repo/OracleLinux/OL9/appstream/$basearch/
+gpgkey=https://yum.oracle.com/RPM-GPG-KEY-oracle-ol9
+gpgcheck=1
+enabled=1
+EOF
+
+
+
+
+
+
+
+=================🔹 Step 1 🔹===========
+
+🔹NTP synchronization should be done
+ [root@bootpsb srvt]# timedatectl
+               Local time: Tue 2026-01-13 12:06:46 IST
+           Universal time: Tue 2026-01-13 06:36:46 UTC
+                 RTC time: Tue 2026-01-13 06:36:46
+                Time zone: Asia/Kolkata (IST, +0530)
+System clock synchronized: yes
+              NTP service: active
+          RTC in local TZ: no
+
+🔹systemctl disable firewalld
+🔹Required Packages: wget,podman,oc and Kubectl
+
+ mkdir -p /root/ocp4/client
+ cd /root/ocp4/client
+ 
+wget https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/4.18.1/openshift-client-linux-amd64-rhel9-4.18.1.tar.gz
+
+tar -xvf openshift-client-linux-amd64-rhel9-4.18.1.tar.gz
+cp kubectl oc /usr/local/bin/
+
+Login to browser to pull secret 
+
+STEP 0:pull secret at /root/pull-secret.json from:
+
+https://console.redhat.com/openshift/install/pull-secret  
+
+{"auths":{"cloud.openshift.com":{"auth":"b3BlbnNoaWZ0LXJlbGVhc2UtZGV2K29jbV9hY2Nlc3NfODQ2NWY4ZWI4YWRjNDIzNzkxMzEyZGQyMmVmMmJkOTA6VDNQVkJDTkZMMDNNWkZRQ1oxTzdUVFFLQVdCQ1JVWFJIWjhFNDRaRzFCSVU0RU1HRjBJUFZJSENJV1RRQkVORQ==","email":"softwarecontact@sarvatra.in"},"quay.io":{"auth":"b3BlbnNoaWZ0LXJlbGVhc2UtZGV2K29jbV9hY2Nlc3NfODQ2NWY4ZWI4YWRjNDIzNzkxMzEyZGQyMmVmMmJkOTA6VDNQVkJDTkZMMDNNWkZRQ1oxTzdUVFFLQVdCQ1JVWFJIWjhFNDRaRzFCSVU0RU1HRjBJUFZJSENJV1RRQkVORQ==","email":"softwarecontact@sarvatra.in"},"registry.connect.redhat.com":{"auth":"fHVoYy1wb29sLTAyNWY1NWE1LTQyZGMtNDQwNS05N2IzLWZiMGY4MDUxN2RmOTpleUpoYkdjaU9pSlNVelV4TWlKOS5leUp6ZFdJaU9pSmhNREptWWpreVlXVTRNR1UwTVRFMU9EazFPRGN6WVdWaU1UUTJZMkV3TmlKOS5DRlc0STBaZXJDRmJDWFhwZXMzUjBJOWJtcGk4ODNYdHg5Q2F1U3NmM2FCX2xoZ2o0MGpWaWZsUmNwTmtYY1FMWHdIYnF0QnZnZTRXM0lURldZS1VDd182Um5lRXJ3eF95MUMtMnRzbTJTYkJyajBLWGVGbHZHZUU4dVV5SkJUMmhWbWRjOXRUdUZFcXNVS1BZYVF0WkxNRVA1bXhPd2U4WVBqWk4zUGpJYW9CRzcySnU4Q2xZRTB6QWxPNVhvZ3FHVDVGaGIyVUNhMUt2bWFwXy1LT1ZfNGk3N1dBaEpiZXl1Zmk5QUM2dkpUMHhGcVBmQnpFREwtSTYtbkJLdW15NE5UczVPZG5LcGljQjQ4N1pkUjdxa1hwYnp4M25SeFNxeDlwZGtJVXFGWDdvQVd1dHJkWUZTOW53dHJQbVhVb3FCdjZKbzJTZkN0TExndVZaR19KRWRMZURfYzRWaHlXT21yS1loMTRmOG04RVloc0dUamhhazhBSFBNUnJhbGkzWnBqZVNhNy1haXFSdDZ4VzFGaTNlV3ZBellteXY1a2ZUOGFQYTBGcDh2RTZCU2F2bE5wT25icm1vRW55RFNuSHR0QTE1N3dSc1loUmM4bkVPalAyUXJUazBRYlRhUDlHS1M4Nzc3c0xOZ3JUejl4LTladWItay1lU0ZRaXFwbHB6dzd6Q1EycWU2WlZUREI0dndFdkthanVwMllrZ2ZCNEhyUkRwQ25meVlMeDRVX1p4d1lVc09BdmtGb3JrS2tJYnhsbEl4YVoyQk1qaVJRd2NfcE9LY0VuV1VCTUtlVXB2cTE2T2k3SmoyX3lPWnhpeXZQOGZtaHJLTjFIZmhVVm5SV0M2aHVYMm12MGV2SHZvVDhlMC11VEEwQzJVRmJNaTVkMERoQjdMUQ==","email":"softwarecontact@sarvatra.in"},"registry.redhat.io":{"auth":"fHVoYy1wb29sLTAyNWY1NWE1LTQyZGMtNDQwNS05N2IzLWZiMGY4MDUxN2RmOTpleUpoYkdjaU9pSlNVelV4TWlKOS5leUp6ZFdJaU9pSmhNREptWWpreVlXVTRNR1UwTVRFMU9EazFPRGN6WVdWaU1UUTJZMkV3TmlKOS5DRlc0STBaZXJDRmJDWFhwZXMzUjBJOWJtcGk4ODNYdHg5Q2F1U3NmM2FCX2xoZ2o0MGpWaWZsUmNwTmtYY1FMWHdIYnF0QnZnZTRXM0lURldZS1VDd182Um5lRXJ3eF95MUMtMnRzbTJTYkJyajBLWGVGbHZHZUU4dVV5SkJUMmhWbWRjOXRUdUZFcXNVS1BZYVF0WkxNRVA1bXhPd2U4WVBqWk4zUGpJYW9CRzcySnU4Q2xZRTB6QWxPNVhvZ3FHVDVGaGIyVUNhMUt2bWFwXy1LT1ZfNGk3N1dBaEpiZXl1Zmk5QUM2dkpUMHhGcVBmQnpFREwtSTYtbkJLdW15NE5UczVPZG5LcGljQjQ4N1pkUjdxa1hwYnp4M25SeFNxeDlwZGtJVXFGWDdvQVd1dHJkWUZTOW53dHJQbVhVb3FCdjZKbzJTZkN0TExndVZaR19KRWRMZURfYzRWaHlXT21yS1loMTRmOG04RVloc0dUamhhazhBSFBNUnJhbGkzWnBqZVNhNy1haXFSdDZ4VzFGaTNlV3ZBellteXY1a2ZUOGFQYTBGcDh2RTZCU2F2bE5wT25icm1vRW55RFNuSHR0QTE1N3dSc1loUmM4bkVPalAyUXJUazBRYlRhUDlHS1M4Nzc3c0xOZ3JUejl4LTladWItay1lU0ZRaXFwbHB6dzd6Q1EycWU2WlZUREI0dndFdkthanVwMllrZ2ZCNEhyUkRwQ25meVlMeDRVX1p4d1lVc09BdmtGb3JrS2tJYnhsbEl4YVoyQk1qaVJRd2NfcE9LY0VuV1VCTUtlVXB2cTE2T2k3SmoyX3lPWnhpeXZQOGZtaHJLTjFIZmhVVm5SV0M2aHVYMm12MGV2SHZvVDhlMC11VEEwQzJVRmJNaTVkMERoQjdMUQ==","email":"softwarecontact@sarvatra.in"}}}
+
+STEP 1: Create Local Image Storage Directory on newly created disk 
+ mkdir -p /var/lib/quay/images
+
+cd //var/lib/quay/images
+🔹 Change: Local directory explicitly created for offline image storage
+
+STEP 2: Set Environment Variables
+
+export OCP_RELEASE=4.18.1
+export ARCHITECTURE=x86_64
+export PULL_SECRET_PATH='/root/pull-secret.json'
+export SAVE_DIR='/var/lib/quay/images'
+
+Verify:
+env | grep -E 'OCP_RELEASE|ARCHITECTURE|PULL_SECRET_PATH|SAVE_DIR'
+
+STEP 3: Login to Registry (Required Once)
+podman login registry.redhat.io -u sarvatra_redhat -p Sarvatra1$ 
+
+info: Mirroring completed in 13m1.57s (27.17MB/s)
+
+Success
+Update image:  openshift/release:4.18.1-x86_64
+
+To upload local images to a registry, run:
+
+    oc image mirror --from-dir=/var/lib/quay/images 'file://openshift/release:4.18.1-x86_64*' REGISTRY/REPOSITORY
+
+Configmap signature file /var/lib/quay/images/config/signature-sha256-d9c985464c031516.json created
+
+
+oc adm release mirror   -a ${PULL_SECRET_PATH}   --from=quay.io/openshift-release-dev/ocp-release:${OCP_RELEASE}-${ARCHITECTURE}   --to-dir=${SAVE_DIR}
+
+STEP 6: Create Tarball on the Same Disk
+cd /var/lib/quay
+mkdir -p push/images
+tar -cvf ocp-4.18.1-images.tar push/images/
+
+ocp-4.18.1-images.tar   ----->Tarball
+
+
+
+
+
+
+
+
+=================🔹 step-2 Quay Setup🔹===========
+
+wget https://mirror.openshift.com/pub/cgw/mirror-registry/latest/mirror-registry-amd64.tar.gz
+
+STEP 1: Prepare Directories for mirror-registry
+mirror-registry expects a base directory for all services.
+
+We will reuse your mounted disk:
+
+mkdir -p /var/lib/quay/mirror-registry
+mkdir -p /var/lib/quay/quay-storage
+
+
+Set ownership (Quay runs as non-root):
+
+chown -R 1001:1001 /var/lib/quay
+chmod -R 755 /var/lib/quay
+
+STEP 2: SELinux (Mandatory – Already Mostly Done)
+
+Just ensure everything under /var/lib/quay is allowed:
+
+semanage fcontext -a -t container_file_t "/var/lib/quay(/.*)?"
+restorecon -Rv /var/lib/quay
+
+STEP 3: Run Quay Install (USING DEDICATED STORAGE)
+
+mkdir -p /var/lib/quay/{quay-root,quay-storage,sqlite}
+chown -R root:root /var/lib/quay
+chmod -R 755 /var/lib/quay
+
+
+make entry in  vi /etc/hosts
+<ip> <ocprepopsb.bank.in>
+
+vi /etc/containers/storage.conf
+graphroot = "/var/lib/quay/containers"
+runroot = "/run/containers/storage"
+
+systemctl start podman
+podman info | grep graphRoot
+
+
+output should be :   graphRoot: /var/lib/quay/containers
+  graphRootAllocated: 160980537344
+  graphRootUsed: 43626582016
+
+
+sudo ./mirror-registry install \
+  --quayHostname registryuat.ocpcbdcuat.psb.bank.in \
+  --initUser srvt \
+  --initPassword redhat123 \
+  --quayRoot /var/lib/quay/quay-root \
+  --quayStorage /var/lib/quay/quay-storage \
+  --sqliteStorage /var/lib/quay/sqlite
+  
+********❌Quay uninstall❌*******
+sudo ./mirror-registry uninstall \
+  --autoApprove \
+  --quayRoot /var/lib/quay/quay-root \
+  --quayStorage /var/lib/quay/quay-storage \
+  --sqliteStorage /var/lib/quay/sqlite
+
+***********❌*********************
+
+
+Quay is available at https://registryuat.ocpcbdcuat.psb.bank.in:8443 with credentials (srvt, redhat123)
+
+create new organisation ---> srvt 
+repository under org-> openshift4.18.1
+
+Final tag created : registryuat.ocpcbdcuat.psb.bank.in::8443/srvt/openshift4.18.1  
+
+✅ Step 1: Login to Quay
+
+Because it’s using a self-signed cert, use --tls-verify=false
+
+podman login registryuat.ocpcbdcuat.psb.bank.in:8443 --tls-verify=false
+Username: srvt
+Password: redhat123
+
+
+tar -xvf ocp-4.18.1-images.tar -C /var/lib/quay/push      ----------> Untar Image bunddle 
+
+
+tar -xvf ocp-4.18.1-images.tar -C /var/lib/quay/push       ---------->ANY PATH with storage
+
+oc image mirror \
+  --from-dir=/var/lib/quay/push/images \
+  "file://openshift/release:4.18.1*" \
+  registryuat.ocpcbdcuat.psb.bank.in:8443/srvt/openshift4.18.1 \
+  --insecure=true
+  
+ 
+cp /var/lib/quay/quay-root/rootCA.pem /etc/pki/ca-trust/source/anchors/   ----->(For normal instalation in /root/quay-root/rootCA.pem) [Same crt required for install-config in trust bunddle]
+
+update-ca-trust extract
+
+ curl -I https://ocprepopsb.bank.in:8443
+ should be 200 
+ 
+=================🔹 step-3 DNS Setup🔹===========
+
+
+[root@servicepsb srvt]# cat /etc/resolv.conf
+# Generated by NetworkManager
+nameserver 10.121.2.180                ---------->change to DNS server on which you are going to setup cluster
+
+✅  STEP 1 – DNS (BIND)
+yum install -y bind bind-utils
+sudo systemctl enable named
+
+=================✅ named ✅================
+
+cat << 'EOF' > /etc/named.conf
+options {
+    listen-on port 53 { any; };
+    listen-on-v6 { none; };
+    directory "/var/named";
+ 
+    allow-query { any; };
+    recursion yes;
+ 
+    forwarders {
+        10.121.1.1;
+    };
+ 
+    dnssec-validation no;
+ 
+    pid-file "/run/named/named.pid";
+    session-keyfile "/run/named/session.key";
+};
+ 
+zone "psb.bank.in" IN {
+    type master;
+    file "forward.psb.bank.in.db";
+};
+ 
+zone "2.121.10.in-addr.arpa" IN {
+    type master;
+    file "reverse.psb.bank.in.db";
+    allow-update { none; };
+};
+EOF
+
+
+
+
+
+
+
+===========================✅ FORWARD ZONE ✅==============================
+
+cat << 'EOF' > /var/named/forward.psb.bank.in.db
+$TTL 1D
+@   IN SOA ns1.psb.bank.in. root.psb.bank.in. (
+        2026011504
+        1H
+        15M
+        1W
+        1D )
+ 
+@       IN NS  ns1.psb.bank.in.
+ 
+ns1                 IN A 10.121.2.180
+ 
+; Bastion / Registry
+registryuat.ocpcbdcuat.psb.bank.in.          IN A 10.121.2.180
+ 
+; Bootstrap
+bootstrap.ocpcbdcuat.psb.bank.in.    IN A 10.121.2.190
+ 
+; Masters
+master1.ocpcbdcuat.psb.bank.in.      IN A 10.121.2.181
+master2.ocpcbdcuat.psb.bank.in.      IN A 10.121.2.182
+master3.ocpcbdcuat.psb.bank.in.      IN A 10.121.2.183
+ 
+; Infra
+infra1.ocpcbdcuat.psb.bank.in.       IN A 10.121.2.184
+infra2.ocpcbdcuat.psb.bank.in.       IN A 10.121.2.186
+infra3.ocpcbdcuat.psb.bank.in.       IN A 10.121.2.187
+ 
+; Workers
+worker1.ocpcbdcuat.psb.bank.in.      IN A 10.121.2.188
+worker2.ocpcbdcuat.psb.bank.in.      IN A 10.121.2.189
+ 
+ 
+; OpenShift required
+api.ocpcbdcuat.psb.bank.in.          IN A 10.121.2.180
+api-int.ocpcbdcuat.psb.bank.in.      IN A 10.121.2.180
+*.apps.ocpcbdcuat.psb.bank.in.       IN A 10.121.2.180
+EOF
+
+
+
+
+
+===========================✅ REVERSE ZONE ✅==============================
+
+cat << 'EOF' > /var/named/reverse.psb.bank.in.db
+$TTL 1D
+@   IN SOA registryuat.ocpcbdcuat.psb.bank.in. root.psb.bank.in. (
+        2026011501
+        1H
+        15M
+        1W
+        1D )
+ 
+@   IN NS registryuat.ocpcbdcuat.psb.bank.in.
+ 
+180 IN PTR registryuat.ocpcbdcuat.psb.bank.in.
+ 
+190 IN PTR bootstrap.ocpcbdcuat.psb.bank.in.
+ 
+181 IN PTR master1.ocpcbdcuat.psb.bank.in.
+182 IN PTR master2.ocpcbdcuat.psb.bank.in.
+183 IN PTR master3.ocpcbdcuat.psb.bank.in.
+ 
+184 IN PTR infra1.ocpcbdcuat.psb.bank.in.
+186 IN PTR infra2.ocpcbdcuat.psb.bank.in.
+187 IN PTR infra3.ocpcbdcuat.psb.bank.in.
+ 
+188 IN PTR worker1.ocpcbdcuat.psb.bank.in.
+189 IN PTR worker2.ocpcbdcuat.psb.bank.in.
+EOF
+
+🔧 Apply & Validate
+
+chown root:named /var/named/*.db
+chmod 640 /var/named/*.db
+restorecon -Rv /var/named
+
+named-checkconf  ---->no output
+named-checkzone psb.bank.in /var/named/forward.psb.bank.in.db ---->should be OK
+named-checkzone 2.121.10.in-addr.arpa /var/named/reverse.psb.bank.in.db  ---->should be OK
+
+systemctl restart named
+systemctl status named
+
+✅FORWARD DNS VALIDATION (forward-dns-check.sh)✅
+dig +short registryuat.ocpcbdcuat.psb.bank.in
+dig +short master1.ocpcbdcuat.psb.bank.in
+dig +short master2.ocpcbdcuat.psb.bank.in
+dig +short master3.ocpcbdcuat.psb.bank.in
+dig +short infra1.ocpcbdcuat.psb.bank.in
+dig +short infra2.ocpcbdcuat.psb.bank.in
+dig +short infra3.ocpcbdcuat.psb.bank.in
+dig +short worker1.ocpcbdcuat.psb.bank.in
+dig +short worker2.ocpcbdcuat.psb.bank.in
+
+✅OpenShift mandatory records✅
+dig +short api.ocpcbdcuat.psb.bank.in
+dig +short api-int.ocpcbdcuat.psb.bank.in
+dig +short test.apps.ocpcbdcuat.psb.bank.in
+
+
+✅REVERSE DNS (PTR record checks)✅
+dig +short -x 10.121.2.180
+dig +short -x 10.121.2.190
+dig +short -x 10.121.2.181
+dig +short -x 10.121.2.182
+dig +short -x 10.121.2.183
+dig +short -x 10.121.2.184
+dig +short -x 10.121.2.186
+dig +short -x 10.121.2.187
+dig +short -x 10.121.2.188
+dig +short -x 10.121.2.189
+
+
+
+
+
+
+
+=================🔹 STEP 2 – DHCP SERVER===========
+
+dnf install -y dhcp-server
+
+cat << 'EOF' > /etc/dhcp/dhcpd.conf
+#
+# DHCP Server Configuration file.
+#   see /usr/share/doc/dhcp-server/dhcpd.conf.example
+#   see dhcpd.conf(5) man page
+authoritative;
+ddns-update-style none;
+allow booting;
+allow bootp;
+ 
+default-lease-time 600;
+max-lease-time 7200;
+ 
+subnet 10.121.2.0 netmask 255.255.255.0 {
+  option routers 10.121.2.191;
+  option subnet-mask 255.255.255.0;
+  option domain-name "psb.bank.in";
+  option domain-name-servers 10.121.2.180;
+}
+ 
+# -----------------------------------
+# OpenShift Static Reservations
+# Domain: ocpcbdcuat.psb.bank.in
+# -----------------------------------
+ 
+# Bastion / Registry (STATIC IP – NOT via DHCP)
+# host ocprepopsb {
+#   hardware ethernet XX:XX:XX:XX:XX:XX;
+#   fixed-address 10.121.2.180;
+# }
+ 
+# Bootstrap
+host bootstrap {
+  hardware ethernet 50:6b:8d:c8:db:83;
+  fixed-address 10.121.2.190;
+}
+ 
+# Masters
+host master1 {
+  hardware ethernet 50:6b:8d:89:32:5f;
+  fixed-address 10.121.2.181;
+}
+ 
+host master2 {
+  hardware ethernet 50:6b:8d:cf:ff:9b;
+  fixed-address 10.121.2.182;
+}
+ 
+host master3 {
+  hardware ethernet 50:6b:8d:b6:b2:38;
+  fixed-address 10.121.2.183;
+}
+ 
+# Infra
+host infra1 {
+  hardware ethernet 50:6b:8d:ff:68:77;
+  fixed-address 10.121.2.184;
+}
+ 
+host infra2 {
+  hardware ethernet 50:6b:8d:f4:c7:0a;
+  fixed-address 10.121.2.186;
+}
+ 
+host infra3 {
+  hardware ethernet 50:6b:8d:ab:13:9f;
+  fixed-address 10.121.2.187;
+}
+ 
+# Workers
+host worker1 {
+  hardware ethernet 50:6b:8d:99:c7:6a;
+  fixed-address 10.121.2.188;
+}
+ 
+host worker2 {
+  hardware ethernet 50:6b:8d:cb:88:7d;
+  fixed-address 10.121.2.189;
+}
+EOF
+
+
+❌If face issue related to lease❌ 
+> /var/lib/dhcpd/dhcpd.leases
+
+***********✅make entry in /etc/resolve.conf✅****************
+
+search psb.bank.in
+nameserver 10.121.2.180
+
+systemctl enable --now dhcpd
+
+(If lease issue)
+systemctl stop dhcpd
+>/var/lib/dhcpd/dhcpd.leases
+systemctl start dhcpd
+
+
+==============🔹 STEP 3 – HAPROXY===============
+setenforce 0
+dnf install -y haproxy
+cp /etc/haproxy/haproxy.cfg /etc/haproxy/haproxy-bkp.cfg
+
+dnf install -y nmap-ncat
+
+
+
+ cat /etc/haproxy/haproxy.cfg
+# =================================================
+# Global settings
+# =================================================
+global
+    log /dev/log local0
+    log /dev/log local1 notice
+    daemon
+    maxconn 20000
+    tune.ssl.default-dh-param 2048
+ 
+# =================================================
+# Default settings
+# =================================================
+defaults
+    log     global
+    mode    tcp
+    option  tcplog
+    option  dontlognull
+    option  tcpka
+    timeout connect 10s
+    timeout client  5m
+    timeout server  5m
+    default-server inter 3s fall 3 rise 2
+ 
+# =================================================
+# HAProxy Stats (Optional but recommended)
+# =================================================
+listen stats
+    bind *:8404
+    mode http
+    stats enable
+    stats uri /stats
+    stats refresh 10s
+ 
+# =================================================
+# OpenShift API Server (External)
+# api.ocpcbdcuat.psb.bank.in:6443
+# =================================================
+frontend ocp_api
+    bind *:6443
+    default_backend ocp_api_backend
+ 
+backend ocp_api_backend
+    balance roundrobin
+    option tcp-check
+    server  bootstrap bootstrap.ocpcbdcuat.psb.bank.in:6443 check
+    server master1 master1.ocpcbdcuat.psb.bank.in:6443 check
+    server master2 master2.ocpcbdcuat.psb.bank.in:6443 check
+    server master3 master3.ocpcbdcuat.psb.bank.in:6443 check
+ 
+# =================================================
+# Machine Config Server
+# api-int.ocpcbdcuat.psb.bank.in:22623
+# =================================================
+frontend ocp_mcs
+    bind *:22623
+    default_backend ocp_mcs_backend
+ 
+backend ocp_mcs_backend
+    balance roundrobin
+    option tcp-check
+    server  bootstrap bootstrap.ocpcbdcuat.psb.bank.in:22623 check
+    server master1 master1.ocpcbdcuat.psb.bank.in:22623 check
+    server master2 master2.ocpcbdcuat.psb.bank.in:22623 check
+    server master3 master3.ocpcbdcuat.psb.bank.in:22623 check
+ 
+# =================================================
+# OpenShift Ingress HTTP
+# *.apps.ocpcbdcuat.psb.bank.in:80
+# =================================================
+frontend ocp_ingress_http
+    bind *:80
+    default_backend ocp_ingress_http_backend
+ 
+backend ocp_ingress_http_backend
+    balance roundrobin
+    option tcp-check
+    option forwardfor
+    server infra1 infra1.ocpcbdcuat.psb.bank.in:80 check
+    server infra2 infra2.ocpcbdcuat.psb.bank.in:80 check
+    server infra3 infra3.ocpcbdcuat.psb.bank.in:80 check
+ 
+# =================================================
+# OpenShift Ingress HTTPS (TLS Passthrough)
+# *.apps.ocpcbdcuat.psb.bank.in:443
+# =================================================
+frontend ocp_ingress_https
+    bind *:443
+    default_backend ocp_ingress_https_backend
+ 
+backend ocp_ingress_https_backend
+    balance roundrobin
+    option tcp-check
+    option forwardfor
+    server infra1 infra1.ocpcbdcuat.psb.bank.in:443 check
+    server infra2 infra2.ocpcbdcuat.psb.bank.in:443 check
+    server infra3 infra3.ocpcbdcuat.psb.bank.in:443 check
+
+
+haproxy -v
+
+haproxy -c -f /etc/haproxy/haproxy.cfg ---->Expected:Configuration file is valid
+systemctl status haproxy  ----->Expected:Active: active (running) No errors in last lines
+
+systemctl reload haproxy
+
+Test:
+nc -vz 10.121.2.180 443
+nc -vz 10.121.2.180 80
+
+Below will work after backend servers are up:
+
+nc -vz master1.ocpcbdcuat.psb.bank.in 6443
+nc -vz master1.ocpcbdcuat.psb.bank.in 22623
+nc -vz infra1.ocpcbdcuat.psb.bank.in 80
+nc -vz infra1.ocpcbdcuat.psb.bank.in 443
+
+
+Enable and start HAProxy
+systemctl enable --now haproxy
+
+
+Check status:
+
+systemctl status haproxy
+
+============✅IMP✅ Post-Install Cleanup (IMPORTANT)=============
+After cluster install finishes:
+
+sudo nano /etc/haproxy/haproxy.cfg
+
+
+❌ Ensure bootstrap is commented:
+
+# server  bootstrap bootstrap.ocpcbdcuat.psb.bank.in:6443 check
+# server  bootstrap bootstrap.ocpcbdcuat.psb.bank.in:22623 check
+
+
+Reload:
+
+sudo haproxy -c -f /etc/haproxy/haproxy.cfg
+sudo systemctl reload haproxy
+
+
+
+==============🔹 STEP 4 – Key-generation  ===============
+yum install wget -y
+wget https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/4.18.1/openshift-install-linux.tar.gz
+tar -xf openshift-install-linux.tar.gz
+
+ssh-keygen -t rsa -b 4096 -N "" -f ~/.ssh/ocp-install
+ls ~/.ssh/
+# ~/.ssh/ocp-install → private key
+# ~/.ssh/ocp-install.pub → public key
+
+- Add the public key to your OpenShift install configuration
+- Use the same private key later to SSH into cluster nodes later
+
+==============🔹 STEP 5 – Install-config.yaml  ===============
+cp /home/srvt/openshift-install /usr/local/bin/
+
+- Create install-config.yaml
+
+
+apiVersion: v1
+baseDomain: psb.bank.in
+
+metadata:
+  name: ocpcbdcuat
+
+# ---------------------------------------------------
+# Compute nodes (Workers + Infra)
+# ---------------------------------------------------
+compute:
+- name: worker
+  replicas: 3
+  hyperthreading: Enabled
+  platform:
+    none: {}
+
+
+# ---------------------------------------------------
+# Control Plane (Masters)
+# ---------------------------------------------------
+controlPlane:
+  name: master
+  replicas: 3
+  hyperthreading: Enabled
+  platform:
+    none: {}
+
+# ---------------------------------------------------
+# Networking
+# ---------------------------------------------------
+networking:
+  networkType: OVNKubernetes
+  clusterNetwork:
+  - cidr: 10.128.0.0/14
+    hostPrefix: 23
+  serviceNetwork:
+  - 172.30.0.0/16
+
+# ---------------------------------------------------
+# Platform (UPI / Bare Metal)
+# ---------------------------------------------------
+platform:
+  none: {}
+
+fips: false
+
+# ---------------------------------------------------
+# SSH Key
+# ---------------------------------------------------
+sshKey: |
+  ssh-rsa  AAAAB3NzaC1yc2EAAAADAQABAAACAQCdeFdWMU8HYfkGDFjwXBKF44N+jZVUeBezH1wOhQZZzc9hlbxTLwkCelj9vBBOSVXyZsA9myCeLIaoijo8JkV20GXfUH+QQ0im/0QdgKf2f5BmwVV88RXwNnkmpb6VvBUpluMEeJLSFTPL7Kvn5n/zk5gpT6nQTxsBwrVYcZeF6LLJ9xYnn9GXZLFV0yF47JLzaYj443Vwo0H0/k0X6hcy7c9shcCHHCPkjGydN0ls30DkhZjw6bxxMFCOOyw8FNkqQCfkjjwaIXQJtajIIcEL3XxfVmdA7rRF6lOHL6r2yE2VgGUpuF/RhZUPDVd4Ma1sVMxhhxURSwrPCUpBxc6nzhcrU7tUp8liSW40wESgqLk8JfBbfU6R3umHEZyz71rlLbl43lWz+RKfYuOCA+GLZb1xRdIbT+ptGATiWUHt5q60Bz9vGn5iKKFn6ngG8mVX7cHaMTiOVPA8gtVySjqqIflsk5LuoLrtTT55hzciuolxvBoIUCwhtH0/JkUi490juTeCVNe9UvOAIg2FceX2MRsghodTiENt1AFi4Xgi+a3gtBuJPJ+EfDkNWjDEAdz0Fmv/es+xrYl7bO0y1Rcmg1XoX7cs4K10XtELg+MdsMLsxFJEJevm0C94aVS4qGboHKyNkSlJVKp4e52eSH/pvz32B7mOPC5qK8s+j2VcRw== root@bastionpsb
+
+# ---------------------------------------------------
+# Pull Secret
+# ---------------------------------------------------
+pullSecret: >
+  {
+    "auths": {
+      "registryuat.ocpcbdcuat.psb.bank.in:8443": {
+        "auth": "c3J2dDpyZWRoYXQxMjM="
+      },
+      "quay.io": {
+        "auth": "ZHVtbXk6ZHVtbXk="
+      }
+    }
+  }
+
+# ---------------------------------------------------
+# Internal Registry CA
+# ---------------------------------------------------
+additionalTrustBundle: |
+  -----BEGIN CERTIFICATE-----
+  MIIEDjCCAvagAwIBAgIUNNeQcNd14EQXyq3EgvtrYy219MAwDQYJKoZIhvcNAQEL
+  BQAwfDELMAkGA1UEBhMCVVMxCzAJBgNVBAgMAlZBMREwDwYDVQQHDAhOZXcgWW9y
+  azENMAsGA1UECgwEUXVheTERMA8GA1UECwwIRGl2aXNpb24xKzApBgNVBAMMInJl
+  Z2lzdHJ5dWF0Lm9jcGNiZGN1YXQucHNiLmJhbmsuaW4wHhcNMjYwMTE2MDkyNzM5
+  WhcNMjgxMTA1MDkyNzM5WjB8MQswCQYDVQQGEwJVUzELMAkGA1UECAwCVkExETAP
+  BgNVBAcMCE5ldyBZb3JrMQ0wCwYDVQQKDARRdWF5MREwDwYDVQQLDAhEaXZpc2lv
+  bjErMCkGA1UEAwwicmVnaXN0cnl1YXQub2NwY2JkY3VhdC5wc2IuYmFuay5pbjCC
+  ASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBAK1F6Rx5pJAP07tFZYsM82xK
+  4kMcJrmZPnxcM7+OAE2tMMb2ALUa2pAK4f6lRqYQ6o3ZiS7lmvw53ysvhexF2OyR
+  99gpfQoKNGGc579EpeVpVpKm+Jf3yfigTfLuXFFxcv5aj4QK2AeDRzODBfxsmrPx
+  AFDgJcpINpBot0Z/mYDdhGVCqeviB7o8KrkIhjg7o/sdPFxgD8CdwavG1ZR3LH31
+  5ndcAdo9Sx2AXTJYYsDRJDUEqM8oZVnGY0M190Ger+9ROQdYdMLs4FLQg5tCtX3V
+  f1jeGbunOyhLep/mUOIUvpSqcSIfGxE9mCYNd64kYsr2BX7n9AsYmgSda5acv70C
+  AwEAAaOBhzCBhDALBgNVHQ8EBAMCAuQwEwYDVR0lBAwwCgYIKwYBBQUHAwEwLQYD
+  VR0RBCYwJIIicmVnaXN0cnl1YXQub2NwY2JkY3VhdC5wc2IuYmFuay5pbjASBgNV
+  HRMBAf8ECDAGAQH/AgEBMB0GA1UdDgQWBBTt8gOYCxcvL0lPZa8Th/zjsRMqdTAN
+  BgkqhkiG9w0BAQsFAAOCAQEABxCAan4dY4d9c0vdks92I5Pqdiq1AW70V0YS40tD
+  6JoqlBk+DcriLDAxQcJMwu+GejFqzOu342wGE39OG/sZCIRielq0bvFuJOfPvwmM
+  +TfDWMm9tTu+VWbynB//0i1RMbo270x8yoOiBfzj5kr1umVUmB8P6Sd6I8vTm/SB
+  zhSHFXUGsB1KcnXROctZ8n3wl1NO2hxP//TVGzF62KOxA6jz1HWJjM8dGqLG2cAb
+  VU9CFPDfCi76uhtarVzRWlckUAiQ2p4UG1smtaXQdkRli/uMwfA56LuUtFUb2qlH
+  w8nisZW4cKbTGxaNlm5PF381+XYUtGzLLUm6askI+Kk5NQ==
+  -----END CERTIFICATE-----
+
+# ---------------------------------------------------
+# Image Content Sources (Disconnected)
+# ---------------------------------------------------
+imageContentSources:
+- mirrors:
+  - registryuat.ocpcbdcuat.psb.bank.in:8443/srvt/openshift4.18.1
+  source: quay.io/openshift-release-dev/ocp-release
+
+- mirrors:
+  - registryuat.ocpcbdcuat.psb.bank.in:8443/srvt/openshift4.18.1
+  source: quay.io/openshift-release-dev/ocp-v4.0-art-dev
+
+
+
+Sanity test before creating manifests: oc adm release info registryuat.ocpcbdcuat.psb.bank.in:8443/srvt/openshift4.18.1:4.18.1-x86_64
+
+openshift-install create manifests --dir=.
+openshift-install create ignition-configs --dir=.
+
+==============🔹 STEP 6 – HTTPD server ===============
+
+Step 1: Install Apache HTTPD
+ yum install httpd -y
+Check version:
+ httpd -v
+Step 2: Change Default Listen Port. By default, Apache listens on port 80. You want it on 8080, so run:
+ sudo sed -i 's/Listen 80/Listen 0.0.0.0:8080/' /etc/httpd/conf/httpd.conf
+This tells Apache to listen on all network interfaces on port 8080.
+Step 3: Start and Enable Apache
+systemctl enable httpd
+systemctl start httpd
+Check status:
+systemctl status httpd
+
+
+ mkdir -p /var/www/html/rhcos
+ mkdir -p /var/www/html/ignition
+
+
+==============🔹 STEP 7 – RHCOS Image ===============
+
+rhcos image 
+wget https://mirror.openshift.com/pub/openshift-v4/dependencies/rhcos/4.18/4.18.1/rhcos-4.18.1-x86_64-metal.x86_64.raw.gz
+
+mv rhcos-4.18.1-x86_64-metal.x86_64.raw.gz rhcos.raw.gz
+
+
+cp rhcos.raw.gz /var/www/html/rhcos/
+cp bootstrap.ign master.ign worker.ign /var/www/html/ignition/
+
+ chmod -R 777 /var/www/html/ignition/
+ chmod -R 777 /var/www/html/rhcos/
+ 
+==============🔹 STEP 8 – Booting RHCOS on Nutanix ===============
+Upload rhcos iso to nutanix and create template from 
+
+https://mirror.openshift.com/pub/openshift-v4/dependencies/rhcos/4.18/4.18.1/rhcos-4.18.1-x86_64-live.x86_64.iso 
+
+From template create 9 machines (Refer Plan)
+ 
+ 
+🟢Lab only setup sizing Minimum no heavy workload 🟢
+
+| Node Type  | vCPU | RAM   | Disk       |
+| ---------- | ---- | ----- | ---------- |
+| **Master** | 4    | 16 GB | 50 GB      |
+| **Worker** | 4    | 16 GB | 50 GB 	 |
+| **Infra**  | 4    | 16 GB | 50 GB      |
+
+
+🟢 Production Baseline sizing Minimum (Small Cluster)🟢
+
+| Node Type  | vCPU | RAM   | Disk       |
+| ---------- | ---- | ----- | ---------- |
+| **Master** | 8    | 32 GB | 200 GB     |
+| **Worker** | 8    | 32 GB | 200–300 GB |
+| **Infra**  | 8    | 32 GB | 200 GB     |
+
+
+🟢VM sizing Minimum (UAT / Test)🟢
+| Node Type            | vCPU | RAM      | Disk       |
+| -------------------- | ---- | -------- | ---------- |
+| **Bootstrap**        | 4    | 16 GB    | 120–150 GB |
+| **Master**           | 4    | 16–32 GB | 150 GB     |
+| **Worker**           | 4    | 16 GB    | 150–200 GB |
+| **Infra (optional)** | 4    | 16 GB    | 150 GB     |
+
+
+
+🔴 IMPORTANT : In boot configuration use UEFI mode only 
+Starting with bootstrap macine 
+
+⚠️Bootstrap Node :
+
+
+Launch console --> sudo su ---> coreos-install install /dev/sda --ignition-url http://<httpd server IP>:8080/ignition/bootstrap.ign --image-url http://<httpd server IP>:8080/rhcos/rhcos.raw.gz --insecure-ignition --insecure 
+
+
+Wait for download complete ----> power off machine ---> click on update ---> remove CD-ROM --->power on with new RHCOS OS + ign file it will boot 
+
+✅Use Following command to ssh into nodes using ssh key
+
+ssh -i ~/.ssh/ocp-install core@<bootstrap node IP>
+
+journalctl -b -f -u release-image.service -u bootkube.service
+
+netstat -tuln (check 6443,22436 port should be up after that only start execution on masters)
+
+
+⚠️Master Node :
+
+Launch console --> sudo su ---> coreos-install install /dev/sda --ignition-url http://<httpd server IP>:8080/ignition/master.ign --image-url http://<httpd server IP>:8080/rhcos/rhcos.raw.gz --insecure-ignition --insecure 
+
+
+Wait for download complete ----> power off machine ---> click on update ---> remove CD-ROM --->power on with new RHCOS OS + ign file it will boot 
+
+
+repeate process for all 3 masters 
+
+
+🟡 NOTE:
+Wait until 'oc get nodes' shows all master nodes Ready and 'oc get co' shows all cluster operators available.
+Only then can you safely remove the bootstrap node.
+
+
+⚠️Infra/Worker Node :
+
+Launch console --> sudo su ---> coreos-install install /dev/sda --ignition-url http://<httpd server IP>:8080/ignition/worker.ign --image-url http://<httpd server IP>:8080/rhcos/rhcos.raw.gz --insecure-ignition --insecure 
+
+
+Wait for download complete ----> power off machine ---> click on update ---> remove CD-ROM --->power on with new RHCOS OS + ign file it will boot 
+
+
+repeate process for all Infra/Worker Node
+
+============🟡 🔹 STEP 9 NOTE / ⚠️ CSR Approval=================
+
+Purpose: Approve any pending CSRs automatically to allow nodes to get certificates and join the cluster.
+
+watch -n 5 'oc get csr | awk '\''$6=="Pending"{print $1}'\'' | xargs -r oc adm certificate approve;oc get no'
+
+
+
+✅ This is especially useful after bootstrap and worker nodes attempt to join. Without approving these CSRs, nodes may stay stuck in NotReady state.
+
+
+===================🟡 🔹 STEP 10 DO THIS (SUPPORTED & SAFE) – Move Infra Workloads===========
+
+1️.Label infra nodes (this is the “infra role” in OpenShift)
+oc label node infra1.ocpcbdcuat.psb.bank.in node-role.kubernetes.io/infra= --overwrite
+oc label node infra2.ocpcbdcuat.psb.bank.in node-role.kubernetes.io/infra= --overwrite
+oc label node infra3.ocpcbdcuat.psb.bank.in node-role.kubernetes.io/infra= --overwrite
+
+
+Verify:
+oc get nodes --show-labels | grep infra
+
+
+
+2️.Taint infra nodes (NoSchedule)
+oc adm taint nodes \
+infra1.ocpcbdcuat.psb.bank.in \
+infra2.ocpcbdcuat.psb.bank.in \
+infra3.ocpcbdcuat.psb.bank.in \
+node-role.kubernetes.io/infra=:NoSchedule
+
+
+Verify:
+oc describe node infra1.ocpcbdcuat.psb.bank.in | grep -i taint
+
+
+3️.Move Ingress (Router) to infra nodes ✅
+
+oc patch ingresscontroller default -n openshift-ingress-operator --type=merge -p '{
+  "spec": {
+    "nodePlacement": {
+      "nodeSelector": {
+        "matchLabels": {
+          "node-role.kubernetes.io/infra": ""
+        }
+      },
+      "tolerations": [
+        {
+          "key": "node-role.kubernetes.io/infra",
+          "operator": "Exists",
+          "effect": "NoSchedule"
+        }
+      ]
+    }
+  }
+}'
+
+
+Verify:
+oc get pods -n openshift-ingress -o wide
+
+
+
+4️.Move Image Registry to infra nodes ✅
+
+
+oc patch configs.imageregistry.operator.openshift.io/cluster --type=merge -p '{
+  "spec": {
+    "nodeSelector": {
+      "node-role.kubernetes.io/infra": ""
+    },
+    "tolerations": [
+      {
+        "key": "node-role.kubernetes.io/infra",
+        "operator": "Exists",
+        "effect": "NoSchedule"
+      }
+    ]
+  }
+}'
+
+
+Verify:
+oc get pods -n openshift-image-registry -o wide
+
+
+5️.(Optional but recommended) Move Monitoring to infra nodes✅
+
+oc patch configmap cluster-monitoring-config -n openshift-monitoring --type merge -p '{
+  "data": {
+    "config.yaml": "prometheusK8s:\n  nodeSelector:\n    node-role.kubernetes.io/infra: \"\"\n  tolerations:\n  - key: node-role.kubernetes.io/infra\n    operator: Exists\n    effect: NoSchedule\n"
+  }
+}'
+
+
+========================================================================================================================================================
+
+console-openshift-console.apps.ocpcbdcuat.psb.bank.in  10.121.2.180
